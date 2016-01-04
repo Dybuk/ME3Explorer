@@ -93,6 +93,26 @@ namespace ME2Explorer
                     }
                 }
             }
+
+            public byte[] Info
+            {
+
+                get { return info; }
+                set
+                {
+                    if (value.Length != info.Length)
+                    {
+                        throw new Exception("New info length does not match old one");
+                    }
+                    pccRef.listsStream.Seek(infoOffset, SeekOrigin.Begin);
+                    pccRef.listsStream.WriteBytes(value);
+                    for (int i = 0; i < value.Length; i++)
+                    {
+                        info[i] = value[i];
+                    }
+                }
+            }
+
             public bool hasChanged;
             public int infoOffset;
         }
