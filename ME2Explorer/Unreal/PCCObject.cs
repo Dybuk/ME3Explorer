@@ -31,6 +31,17 @@ namespace ME2Explorer
             public int PackageNameID;
             public int ObjectNameID { get { return BitConverter.ToInt32(info, 12); } set { Buffer.BlockCopy(BitConverter.GetBytes(value), 0, info, 12, sizeof(int)); } }
             public string ObjectName;
+            public int exportid;
+
+            public byte[] exportIdByte
+            {
+                get 
+                {
+                    byte[] nameByte = System.BitConverter.GetBytes(exportid);
+                    return nameByte;
+                }
+            }
+
             public string PackageFullName;
             public string ClassName;
             public byte[] flag
@@ -88,8 +99,6 @@ namespace ME2Explorer
                     if (value.Length != DataSize)
                     {
                         DataSize = value.Length;
-                        pccRef.listsStream.Seek(infoOffset, SeekOrigin.Begin);
-                        pccRef.listsStream.WriteBytes(info);
                     }
                 }
             }
@@ -100,12 +109,16 @@ namespace ME2Explorer
                 get { return info; }
                 set
                 {
+                    if (info == null)
+                    {
+                        info = new byte[value.Length];
+                    }
+
                     if (value.Length != info.Length)
                     {
                         throw new Exception("New info length does not match old one");
                     }
-                    pccRef.listsStream.Seek(infoOffset, SeekOrigin.Begin);
-                    pccRef.listsStream.WriteBytes(value);
+
                     for (int i = 0; i < value.Length; i++)
                     {
                         info[i] = value[i];
@@ -113,8 +126,38 @@ namespace ME2Explorer
                 }
             }
 
+            public void setObjectName(string name)
+            {
+                byte[] nameByte = pccRef.getNameByte(name);
+                info[12] = nameByte[0];
+                info[13] = nameByte[1];
+                info[14] = nameByte[2];
+                info[15] = nameByte[3];
+                ObjectName = name;
+            }
+
+            public void setPackageName(string name)
+            {
+                if (name == "")
+                {
+                    PackageFullName = "Base Package";
+                    info[8] = 0;
+                    info[9] = 0;
+                    info[10] = 0;
+                    info[11] = 0;
+                }
+                else
+                {
+                    PackageFullName = name;
+                    byte[] packageByte = pccRef.getExportIdByte(name);
+                    info[8] = packageByte[0];
+                    info[9] = packageByte[1];
+                    info[10] = packageByte[2];
+                    info[11] = packageByte[3];
+                }
+            }
+
             public bool hasChanged;
-            public int infoOffset;
         }
         public struct ImportEntry
         {
@@ -173,11 +216,12 @@ namespace ME2Explorer
         public string fullname;
         public string pccFileName;
 
-        public PCCObject(String path)
+        public PCCObject(String path, Boolean littleEndian=true)
         {
             lzo = new SaltLZOHelper();
             fullname = path;
-            BitConverter.IsLittleEndian = true;
+            BitConverter.IsLittleEndian = littleEndian;
+            StreamHelpers.setIsLittleEndian(littleEndian);
             DebugOutput.PrintLn("Load file : " + path);
             pccFileName = Path.GetFullPath(path);
             MemoryStream tempStream = new MemoryStream();
@@ -275,6 +319,13 @@ namespace ME2Explorer
                 listsStream.WriteValueS32(-14);
             }
 
+            ExportCount = Exports.Count;
+            ExportOffset = (int)listsStream.Position;
+            foreach (ExportEntry exp in Exports)
+            {
+                listsStream.WriteBytes(exp.Info);
+            }
+
             DebugOutput.PrintLn("Writing pcc to: " + path + "\nRefreshing header to stream...");
             listsStream.Seek(0, SeekOrigin.Begin);
             listsStream.WriteBytes(header);
@@ -283,6 +334,54 @@ namespace ME2Explorer
             {
                 listsStream.WriteTo(fs);
             }
+        }
+
+        public ExportEntry cloneExport(int exportid, string newPackageName, string newObjectName)
+        {
+            ExportEntry cloneObj = Exports[exportid-1];
+
+            
+            ExportEntry exp = new ExportEntry();
+            exp.pccRef = this;
+            
+            exp.Info = cloneObj.Info;
+            
+            listsStream.Seek(ExportDataEnd, SeekOrigin.Begin);
+            exp.DataSize = cloneObj.DataSize;
+            exp.DataOffset = (int)listsStream.Position;
+            exp.ClassName = cloneObj.ClassName;
+
+            byte[] data = cloneObj.Data;
+
+            listsStream.Seek(ExportDataEnd, SeekOrigin.Begin);
+            listsStream.WriteBytes(data);
+            exp.exportid = Exports.Count()+1;
+
+            exp.setPackageName(newPackageName);
+            exp.setObjectName(newObjectName);
+
+            LastExport = exp;
+            Exports.Add(exp);
+            return exp;
+        }
+
+        public byte[] getNameByte(string name)
+        {
+            int i = AddName(name);
+            byte[] nameByte = System.BitConverter.GetBytes(i);
+            return nameByte;
+        }
+
+        public byte[] getExportIdByte(string name)
+        {
+            foreach (ExportEntry exp in Exports)
+            {
+                if (exp.PackageFullName == "Base Package" && exp.ObjectName == name)
+                {
+                    return exp.exportIdByte;
+                }
+            }
+            return null;
         }
 
         private void ReadNames(MemoryStream fs)
@@ -328,7 +427,7 @@ namespace ME2Explorer
                 long start = fs.Position;
                 ExportEntry exp = new ExportEntry();
                 exp.pccRef = this;
-                exp.infoOffset = (int)start;
+                exp.exportid = i+1;
 
                 fs.Seek(40, SeekOrigin.Current);
                 int count = fs.ReadValueS32();
@@ -395,6 +494,7 @@ namespace ME2Explorer
             return s;
         }
 
+
         internal string getObjectName(int index)
         {
             if (index > 0 && index < ExportCount)
@@ -431,6 +531,8 @@ namespace ME2Explorer
                 fs.WriteBytes(stream);
             }
         }
+
+        
 
         public int FindExp(string name)
         {
