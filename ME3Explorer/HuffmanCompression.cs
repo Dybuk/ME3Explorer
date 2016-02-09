@@ -8,7 +8,7 @@ using System.Xml;
 
 namespace ME3Explorer
 {
-    class HuffmanCompression
+    public class HuffmanCompression
     {
         private Version _inputFileVersion = new Version("1.0.0.0");
         private List<TLKEntry> _inputData = new List<TLKEntry>();
