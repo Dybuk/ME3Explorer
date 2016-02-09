@@ -242,6 +242,15 @@ namespace ME2Explorer.Unreal
             return pg;
         }
 
+        public static void printbytes(byte[] raw, int start, int length)
+        {
+            for (int i=start; i<start+length; i++)
+            {
+                Console.Write(raw[i].ToString("X2")+" ");
+            }
+            Console.WriteLine("");
+        }
+
         public static List<Property> ReadProp(ME2Explorer.PCCObject pcc, byte[] raw, int start)
         {
             Property p;
@@ -251,11 +260,12 @@ namespace ME2Explorer.Unreal
             int pos = start;
             if (raw.Length - pos < 8)
                 return result;
-            int name = (int)BitConverter.ToInt64(raw, pos);
+            int name = (int)BitConverter.ToInt32(raw, pos);
+            //printbytes(raw, pos, 60);
             if (!pcc.isName(name))
                 return result;
             string t = pcc.GetName(name);
-            if (t == "None")
+            if (t == "None")    
             {
                 p = new Property();
                 p.Name = t;
@@ -269,11 +279,12 @@ namespace ME2Explorer.Unreal
                 result.Add(p);
                 return result;
             }
-            int type = (int)BitConverter.ToInt64(raw, pos + 8);
+            int type = (int)BitConverter.ToInt32(raw, pos + 8);
             int size = BitConverter.ToInt32(raw, pos + 16);
             int idx = BitConverter.ToInt32(raw, pos + 20); //Unused
             if (!pcc.isName(type) || size < 0 || size >= raw.Length)
                 return result;
+
             string tp = pcc.GetName(type);
             switch (tp)
             {
