@@ -27,12 +27,20 @@ namespace Gibbed.IO
 {
     public static partial class StreamHelpers
     {
+
+        public static bool IsLittleEndian = true;
+
+        public static void setIsLittleEndian(bool setting)
+        {
+            IsLittleEndian = setting;
+        }
+
         internal static bool ShouldSwap(Endian endian)
         {
             switch (endian)
             {
-                case Endian.Little: return BitConverter.IsLittleEndian == false;
-                case Endian.Big: return BitConverter.IsLittleEndian == true;
+                case Endian.Little: return IsLittleEndian == false;
+                case Endian.Big: return IsLittleEndian == true;
                 default: throw new ArgumentException("unsupported endianness", "endian");
             }
         }
